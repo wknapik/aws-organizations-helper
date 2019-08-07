@@ -1,0 +1,164 @@
+#!/usr/bin/env bash
+
+# Requirements: bash, coreutils, util-linux.
+#     for --output-format cookie-raw, also awscli.
+#     for --input-format aws-api, also jq.
+
+# Special behaviors.
+set -eEo pipefail
+shopt -s inherit_errexit 2>/dev/null || true
+
+# Configuration.
+readonly prog="$(basename "$0")"
+readonly md5cmd="$(command -v md5sum md5|head -n1)"
+declare -A opt=([input-format]=aws-api [output-format]=aws-config [default-role]=OrganizationAccountAccessRole)
+declare -a predefined_colors=(F2B0A9 FBBF93 FAD791 B7CA9D 99BCE3)
+
+# The internal representation of ingested input.
+declare -A dict # ([$account_id,role_name], [$account_id,display_name], [$account_id,color])
+declare -a account_ids
+
+# $@ = ""
+help() {
+    echo -e "USAGE: $prog [options]
+Process information about AWS organizations
+  -i | --input-format ifmt\tinput format [${opt[input-format]}]
+  -o | --output-format ofmt\toutput format [${opt[output-format]}]
+  -r | --default-role role\tdefault role [${opt[default-role]}]
+  -h | --help\t\t\tprint this help and exit
+
+ifmt = aws-config | aws-api
+ofmt = aws-config | cookie-raw | links-raw
+
+E.g.:
+% aws organizations list-accounts|aws-organizations-helper >>~/.aws/config
+% aws-organizations-helper -i aws-config -o links-raw <~/.aws/config
+"
+    exit 2
+}
+
+# $@ = program_arguments
+parse_command_line() {
+    local -a options
+    read -ra options <<<"$(getopt -u -o hi:o:r: \
+        -l help,input-format:,output-format:,default-role: -n "$prog" -- "$@" || true)"
+    set -- "${options[@]}"
+    while true; do
+        case "$1" in
+            -i|--input-format) opt[input-format]="$2"; shift 2;;
+            -o|--output-format) opt[output-format]="$2"; shift 2;;
+            -r|--default-role) opt[default-role]="$2"; shift 2;;
+            -h|--help) help;;
+            --) shift; break;;
+            *) break;;
+        esac
+    done
+    readonly opt
+    case "${opt[input-format]}" in aws-config|aws-api) ;; *) help;; esac
+    case "${opt[output-format]}" in aws-config|cookie-raw|links-raw) ;; *) help;; esac
+}
+
+# $@ = account_id role_name display_name color
+dict_add() {
+    account_ids+=("${1:?}")
+    dict["$account_id",role_name]="${2:?}"
+    dict["$account_id",display_name]="${3:?}"
+    dict["$account_id",color]="${4:?}"
+}
+
+# $@ = account_id key
+dict_get() { echo "${dict["${1:?}","${2:?}"]}"; }
+
+# $@ = account_id
+get_color() {
+    local -r account_id="${1:?}"
+    if [[ "${opt[output-format]}" == cookie* ]]; then
+        printf "%06X" "$(("0x$(echo -n "$account_id"|"$md5cmd"|cut -c1-15)" % 0x1000000))"
+    else
+        echo "${predefined_colors[$(("0x$account_id" % 5))]}"
+    fi
+}
+
+# $@ = ""
+input_aws_config() {
+    local account_id display_name role_name
+    while read -r line; do
+        if [[ "$line" =~ ^[[:space:]]*\[ ]]; then
+            if [[ -n "$display_name" && -n "$account_id" && -n "$role_name" ]]; then
+                dict_add "$account_id" "$role_name" "$display_name" "$(get_color "$account_id")"
+            fi
+            unset display_name account_id role_name
+            if [[ "$line" =~ ^[[:space:]]*\[profile[[:space:]]+([^\]]+)\] ]]; then
+                display_name="${BASH_REMATCH[1]}"
+            fi
+        elif [[ "$line" =~ ^[[:space:]]*role_arn[[:space:]]*=[[:space:]]*arn:aws:iam::([0-9]+):role/([^[:space:]]+) ]]; then
+            account_id="${BASH_REMATCH[1]}"
+            role_name="${BASH_REMATCH[2]}"
+        fi
+    done < <(cat - && echo -e '\n[')
+}
+
+# $@ = ""
+input_aws_api() {
+    local account_id display_name
+    while read -r account_id display_name; do
+        dict_add "$account_id" "${opt[default-role]}" "$display_name" "$(get_color "$account_id")"
+    done < <(jq -r '.Accounts[]|"\(.Id)\t\(.Name)"')
+}
+
+# $@ = string
+urlencode() {
+    local c
+    echo -n "$*"|while IFS= read -r -n 1 -d '' c; do
+        case "$c" in
+            [a-zA-Z0-9.~_-]) printf "%s" "$c";;
+            *) printf '%%%02X' "'$c";;
+        esac
+    done
+}
+
+# $@ = ""
+output_links_raw() {
+    local color display_name role_name
+    for account_id in "${account_ids[@]}"; do
+        role_name="$(urlencode "$(dict_get "$account_id" role_name)")"
+        display_name="$(urlencode "$(dict_get "$account_id" display_name)")"
+        color="$(urlencode "$(dict_get "$account_id" color)")"
+        echo "https://signin.aws.amazon.com/switchrole?account=$account_id&roleName=$role_name&displayName=$display_name&color=$color"
+    done
+}
+
+# $@ = ""
+output_cookie_raw() {
+    local account_id cur_account_id payload
+
+    [[ "${#account_ids[@]}" -le 5 ]] || echo "WARNING: AWS console will only display the first 5 profiles." >&2
+    [[ "${#account_ids[@]}" -ge 1 ]] || echo "WARNING: No profiles with role_arn found." >&2
+
+    cur_account_id="$(aws sts get-caller-identity --query Account --output text)"
+    payload="{\"bn\":\"\",\"ba\":\"$cur_account_id\",\"rl\":["
+    for account_id in "${account_ids[@]}"; do
+        payload+="{\"a\":\"$account_id\",\"r\":\"$(dict_get "$account_id" role_name)\","
+        payload+="\"d\":\"$(dict_get "$account_id" display_name)\",\"c\":\"$(dict_get "$account_id" color)\"},"
+    done
+    payload="${payload%,}]}"
+    echo "noflush_awsc-roleInfo=$(urlencode "$payload")"
+}
+
+# $@ = ""
+output_aws_config() {
+    local color display_name role_name
+    for account_id in "${account_ids[@]}"; do
+        echo "[profile $(dict_get "$account_id" display_name)]"
+        echo -e "role_arn = arn:aws:iam::$account_id:role/$(dict_get "$account_id" role_name)\nsource_profile = default\n"
+    done
+}
+
+# $@ = program_arguments
+main() {
+    parse_command_line "$@"
+    input_"${opt[input-format]//-/_}"
+    output_"${opt[output-format]//-/_}"
+}
+
+main "$@"
