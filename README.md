@@ -52,7 +52,7 @@ https://signin.aws.amazon.com/switchrole?account=1337&roleName=OrganizationAccou
 ```
 % aws organizations list-accounts|aws-organizations-helper -i aws-api -o cookie-raw
 WARNING: AWS console will only display the first 5 profiles.
-noflush_awsc-roleInfo=%7B%22bn%22%3A%22botocore-session-31337%22%2C%22ba%22%3A%2231337%22%2C%22rl%22%3A%5B%7B%22a%22%3A%221338%22%2C%22r%22%3A%22OrganizationAccountAccessRole%22%2C%22d%22%3A%22some_account%22%2C%22c%22%3A%229A8A40%22%7D%5D%7D%0A
+noflush_awsc-roleInfo=%7B%22bn%22%3A%22%22%2C%22ba%22%3A%221337%22%2C%22rl%22%3A%5B%7B%22a%22%3A%221338%22%2C%22r%22%3A%22OrganizationAccountAccessRole%22%2C%22d%22%3A%22some_account%22%2C%22c%22%3A%229A8A40%22%7D%5D%7D%0A
 %
 ```
 
@@ -83,7 +83,7 @@ https://signin.aws.amazon.com/switchrole?account=1337&roleName=OrganizationAccou
 ```
 % aws-organizations-helper -i aws-config -o cookie-raw <~/.aws/config
 WARNING: AWS console will only display the first 5 profiles.
-noflush_awsc-roleInfo=%7B%22bn%22%3A%22botocore-session-31337%22%2C%22ba%22%3A%2231337%22%2C%22rl%22%3A%5B%7B%22a%22%3A%221338%22%2C%22r%22%3A%22OrganizationAccountAccessRole%22%2C%22d%22%3A%22some_account%22%2C%22c%22%3A%229A8A40%22%7D%5D%7D%0A
+noflush_awsc-roleInfo=%7B%22bn%22%3A%22%22%2C%22ba%22%3A%221337%22%2C%22rl%22%3A%5B%7B%22a%22%3A%221338%22%2C%22r%22%3A%22OrganizationAccountAccessRole%22%2C%22d%22%3A%22some_account%22%2C%22c%22%3A%229A8A40%22%7D%5D%7D%0A
 %
 ```
 
