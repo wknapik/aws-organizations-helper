@@ -25,6 +25,7 @@ USAGE: aws-organizations-helper [options]
 Process information about AWS organizations
   -i | --input-format ifmt      input format [aws-api]
   -o | --output-format ofmt     output format [aws-config]
+  -g | --default-region region  default region []
   -r | --default-role role      default role [OrganizationAccountAccessRole]
   -h | --help                   print this help and exit
 
@@ -32,7 +33,7 @@ ifmt = aws-config | aws-api
 ofmt = aws-config | cookie-raw | links-raw
 
 E.g.:
-% aws organizations list-accounts|aws-organizations-helper >>~/.aws/config
+% aws organizations list-accounts|aws-organizations-helper -g eu-west-1 >>~/.aws/config
 % aws-organizations-helper -i aws-config -o links-raw <~/.aws/config
 ```
 
@@ -59,10 +60,12 @@ noflush_awsc-roleInfo=%7B%22bn%22%3A%22%22%2C%22ba%22%3A%221337%22%2C%22rl%22%3A
 ### Print a config
 
 ```
-% aws organizations list-accounts|aws-organizations-helper -i aws-api -o aws-config
-[profile some_account]                                                                                                                                                                                                                      
-role_arn = arn:aws:iam::1337:role/OrganizationAccountAccessRole                                                                                                                                                                        
+% aws organizations list-accounts|aws-organizations-helper -i aws-api -o aws-config -g eu-west-1
+[profile some_account]
+role_arn = arn:aws:iam::1337:role/OrganizationAccountAccessRole
 source_profile = default
+region = eu-west-1
+
 [...]
 %
 ```
@@ -91,10 +94,12 @@ noflush_awsc-roleInfo=%7B%22bn%22%3A%22%22%2C%22ba%22%3A%221337%22%2C%22rl%22%3A
 
 ```
 # Doesn't make much sense to run, other than to verify that the helper works correctly.
-% aws-organizations-helper -i aws-config -o aws-config <~/.aws/config
-[profile some_account]                                                                                                                                                                                                                      
-role_arn = arn:aws:iam::1337:role/OrganizationAccountAccessRole                                                                                                                                                                        
+% aws-organizations-helper -i aws-config -o aws-config -g eu-west-1 <~/.aws/config
+[profile some_account]
+role_arn = arn:aws:iam::1337:role/OrganizationAccountAccessRole
 source_profile = default
+region = eu-west-1
+
 [...]
 %
 ```
