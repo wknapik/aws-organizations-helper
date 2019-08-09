@@ -11,7 +11,12 @@ shopt -s inherit_errexit 2>/dev/null || true
 # Configuration.
 readonly prog="$(basename "$0")"
 readonly md5cmd="$(command -v md5sum md5|head -n1)"
-declare -A opt=([default-region]="" [default-role]=OrganizationAccountAccessRole [input-format]=aws-api [output-format]=aws-config)
+declare -A opt=(
+    [default-region]=""
+    [default-role]=OrganizationAccountAccessRole
+    [input-format]=aws-api
+    [output-format]=aws-config
+)
 declare -a predefined_colors=(F2B0A9 FBBF93 FAD791 B7CA9D 99BCE3)
 
 # The internal representation of ingested input.
